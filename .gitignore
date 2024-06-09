@@ -7,6 +7,15 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+Data/
+!Data/.gitkeep
+Figure/
+!Figure/.gitkeep
+LLSubScripts/
+!LLSubScripts/.gitkeep
+LOG/
+!LOG/.gitkeep
+
 .Python
 build/
 develop-eggs/
