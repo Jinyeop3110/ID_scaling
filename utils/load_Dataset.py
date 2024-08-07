@@ -11,28 +11,35 @@ import zstandard as zstd
 import io
 
 
-def load_Datasets(dataset_config_dict):
-    dataset_config = SimpleNamespace(**dataset_config_dict)
+def load_Dataset(dataset_config):
 
-    if dataset_config.name == 'openwebtext_parquet':
+    if dataset_config.dataset_name == 'openwebtext_parquet':
         dataset = load_and_concat_openwebtext_parquet(
-            dataset_config.subset,
+            dataset_config.dataset_subset,
             base_directory=dataset_config.base_directory if dataset_config.base_directory else '../Datasets/openwebtext_parquet/',
             engine='pyarrow'
         )
-    elif dataset_config.name == 'dolma_v1.6_sample':
-        dataset = load_and_concat_dolma_sample(dataset_config.subset)
-    elif dataset_config.name == 'pile_uncopyrighted':
-        dataset = load_and_concat_pile(dataset_config.subset)
-    elif dataset_config.name == 'pile_uncopyrighted_parquet':
-        dataset = load_and_concat_pile_parquet(dataset_config.subset)
+    elif dataset_config.dataset_name == 'dolma_v1.6_sample':
+        dataset = load_and_concat_dolma_sample(dataset_config.dataset_subset)
+    elif dataset_config.dataset_name == 'pile_uncopyrighted':
+        dataset = load_and_concat_pile(dataset_config.dataset_subset)
+    elif dataset_config.dataset_name == 'pile_uncopyrighted_parquet_train':
+        dataset = load_and_concat_pile_parquet('train', dataset_config.dataset_subset)
+    elif dataset_config.dataset_name == 'pile_uncopyrighted_parquet_valid':
+        dataset = load_and_concat_pile_parquet('valid', dataset_config.dataset_subset)
+    elif dataset_config.dataset_name == 'pile_uncopyrighted_parquet_test':
+        dataset = load_and_concat_pile_parquet('test', dataset_config.dataset_subset)
     else:
-        raise ValueError(f"Unsupported dataset type: {dataset_config.name}")
+        raise ValueError(f"Unsupported dataset type: {dataset_config.dataset_name}")
+
+    dataset=dataset.select(range(dataset_config.max_dataset_size)) if dataset_config.max_dataset_size else dataset
     return dataset
 
     
 
-def load_and_concat_pile_parquet(subset):
+    
+
+def load_and_concat_pile_parquet(type, subset):
     # Define the features
     features = Features({
         "text": Value("string"),
@@ -41,7 +48,12 @@ def load_and_concat_pile_parquet(subset):
     })
 
     # Base directory and subset
-    base_directory = '../Datasets/pile-uncopyrighted_parquet/default/partial-train/'
+    if type == 'train':
+        base_directory = '../Datasets/pile-uncopyrighted_parquet/default/partial-train/'
+    elif type == 'valid':
+        base_directory = '../Datasets/pile-uncopyrighted_parquet/default/partial-validation/'
+    elif type == 'test':
+        base_directory = '../Datasets/pile-uncopyrighted_parquet/default/partial-test/'
 
     # Load and concatenate each file in the subset
     all_data = []
@@ -66,7 +78,7 @@ def load_and_concat_pile_parquet(subset):
     return dataset
 
 
-def load_and_concat_pile(subset):
+def load_and_concat_pile(dataset_subset):
     def load_jsonl_zst(file_path):
         data = []
         with open(file_path, 'rb') as compressed_file:
@@ -82,12 +94,12 @@ def load_and_concat_pile(subset):
         "meta": Value("string")
     })
 
-    # Base directory and subset
+    # Base directory and dataset_subset
     base_directory = '../Datasets/pile-uncopyrighted/train/'
 
-    # Load and process each file in the subset
+    # Load and process each file in the dataset_subset
     all_data = []
-    for index in subset:
+    for index in dataset_subset:
         file_path = os.path.join(base_directory, f'{index:02d}.jsonl.zst')
         data = load_jsonl_zst(file_path)
         for idx, item in enumerate(data):
@@ -109,7 +121,7 @@ def load_and_concat_pile(subset):
 
     return dataset
 
-def load_and_concat_dolma_sample(subset, base_directory = '../Datasets/dolma_v1.6_sample/'):
+def load_and_concat_dolma_sample(dataset_subset, base_directory = '../Datasets/dolma_v1.6_sample/'):
     def load_json_gz(file_path):
         data = []
         with gzip.open(file_path, 'rt', encoding='utf-8') as f:
@@ -126,11 +138,11 @@ def load_and_concat_dolma_sample(subset, base_directory = '../Datasets/dolma_v1.
         "source": Value("string"),
     })
 
-    # Base directory and subset
+    # Base directory and dataset_subset
 
-    # Load and process each file in the subset
+    # Load and process each file in the dataset_subset
     all_data = []
-    for index in subset:
+    for index in dataset_subset:
         file_path = os.path.join(base_directory, f'v1_5r2_sample-{index:04d}.json.gz')
         data = load_json_gz(file_path)
         for idx, item in enumerate(data):
@@ -144,12 +156,12 @@ def load_and_concat_dolma_sample(subset, base_directory = '../Datasets/dolma_v1.
 
 
 
-def load_and_concat_openwebtext_parquet(subset, base_directory='../Datasets/openwebtext_parquet/', engine='pyarrow'):
+def load_and_concat_openwebtext_parquet(dataset_subset, base_directory='../Datasets/openwebtext_parquet/', engine='pyarrow'):
     """
     Loads specified Parquet files and concatenates them into a single DataFrame.
 
     Parameters:
-    - subset: list of integers, specifying which Parquet files to load.
+    - dataset_subset: list of integers, specifying which Parquet files to load.
     - base_directory: str, the base path where the Parquet files are stored.
     - engine: str, either 'pyarrow' or 'fastparquet', specifying the engine for reading Parquet files.
 
@@ -158,7 +170,7 @@ def load_and_concat_openwebtext_parquet(subset, base_directory='../Datasets/open
     """
     dataframes = []  # To store individual DataFrames before concatenation
 
-    for index in subset:
+    for index in dataset_subset:
         # Generate the file path from the index
         file_path = os.path.join(base_directory, f'{index:04d}.parquet')
         

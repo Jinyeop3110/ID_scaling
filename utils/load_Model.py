@@ -24,34 +24,45 @@ from pathlib import Path
 import json
 
 
-def load_Model(model_type, checkpoint=None, set_grad_enabled=False):
+
+
+
+
+BASIC_MODEL_TYPES = ['llama-7b', 'mistral-7b']
+ATTENTION_ONLY_MODEL_TYPES = ['attn-only-1l', 'attn-only-2l', 'attn-only-3l', 'attn-only-4l']
+GPT2_TYPES = ['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
+OLMO_TYPES = ['olmo-1b', 'olmo-7b']
+PYTHIA_TYPES = [
+    'pythia-1.4b', 'pythia-12b', 'pythia-14m', 'pythia-160m-deduped', 
+    'pythia-1b-deduped', 'pythia-2.8b-deduped', 'pythia-410m-deduped', 
+    'pythia-6.9b-deduped', 'pythia-70m-deduped', 'pythia-1.4b-deduped', 
+    'pythia-12b-deduped', 'pythia-160m', 'pythia-1b', 'pythia-2.8b', 
+    'pythia-410m', 'pythia-6.9b', 'pythia-70m'
+]
+ALL_MODEL_TYPES=BASIC_MODEL_TYPES+ATTENTION_ONLY_MODEL_TYPES+GPT2_TYPES+OLMO_TYPES+PYTHIA_TYPES
+
+
+
+
+def load_Model(model_config, set_grad_enabled=False):
     torch.set_grad_enabled(set_grad_enabled)
+    
+    model_type = model_config.model_name
+    checkpoint = model_config.model_checkpoint
 
-    basic_model_types = ['llama-7b', 'mistral-7b']
-    attention_only_model_types = ['attn-only-1l', 'attn-only-2l', 'attn-only-3l', 'attn-only-4l']
-    gpt2_types = ['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
-    olmo_types = ['olmo-1b', 'olmo-7b']
-    pythia_types = [
-        'pythia-1.4b', 'pythia-12b', 'pythia-14m', 'pythia-160m-deduped', 
-        'pythia-1b-deduped', 'pythia-2.8b-deduped', 'pythia-410m-deduped', 
-        'pythia-6.9b-deduped', 'pythia-70m-deduped', 'pythia-1.4b-deduped', 
-        'pythia-12b-deduped', 'pythia-160m', 'pythia-1b', 'pythia-2.8b', 
-        'pythia-410m', 'pythia-6.9b', 'pythia-70m'
-    ]
-
-    if model_type in basic_model_types:
+    if model_type in BASIC_MODEL_TYPES:
         model, tokenizer = load_basic_models(model_type, set_grad_enabled)
-    elif model_type in attention_only_model_types:
+    elif model_type in ATTENTION_ONLY_MODEL_TYPES:
         model, tokenizer = load_attention_only_models(model_type, set_grad_enabled)
-    elif model_type in gpt2_types:
+    elif model_type in GPT2_TYPES:
         model, tokenizer = load_gpt2_models(model_type, set_grad_enabled)
-    elif model_type in olmo_types:
+    elif model_type in OLMO_TYPES:
         if checkpoint is None:
             checkpoint = "main"
         model, tokenizer = load_olmo_models(model_type, checkpoint, set_grad_enabled)
-    elif model_type in pythia_types:
+    elif model_type in PYTHIA_TYPES:
         if checkpoint is None:
-            checkpoint = "step140000"
+            checkpoint = "main"
         model, tokenizer = load_pythia_models(model_type, checkpoint, set_grad_enabled)
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
