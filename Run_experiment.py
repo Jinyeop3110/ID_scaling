@@ -151,6 +151,7 @@ def main(config):
     module_name_mapping, module_name_keys = create_module_names(config.model_config.module_name_mapping, config.cacheing_config.layer_idx_list, config.cacheing_config.module_inblock_keys, config.cacheing_config.module_outblock_keys)
 
     print(module_name_mapping)
+
     print(module_name_keys)
 
 
@@ -336,7 +337,7 @@ if __name__ == "__main__":
         "cacheing_config" : {
             "layer_idx_list": [0,1,2,5],  # Convert numpy array to list
             "module_inblock_keys": ['mlp', 'attn', 'block'],
-            "module_outblock_keys": ['emb', 'unemb'],
+            "module_outblock_keys": ['unemb'],
             "save_fp": "torch.float16",
             "save_cache_tensors":True, # -> 
             "save_mean_tensors":True,
@@ -356,24 +357,3 @@ if __name__ == "__main__":
 
     config = recursive_bunchify(default_config)
     main(config)
-
-
-    '''    def str2bool(v):
-        if isinstance(v, bool):
-            return v
-        if v.lower() in ('yes', 'true', 't', 'y', '1'):
-            return True
-        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-            return False
-        else:
-            raise argparse.ArgumentTypeError('Boolean value expected.')
-    
-    parser.add_argument('--session_name', type=str, required=True, help='Name of the session')
-    parser.add_argument('--model_name', type=str, required=True, help='Name of the model')
-    parser.add_argument('--model_checkpoint', type=str, required=True, help='Checkpoint of the model')
-    parser.add_argument('--dataset_name', type=str, required=True, help='Name of the dataset')
-    parser.add_argument('--dataset_subset', type=int, nargs='*', required=True, help='Subset of the dataset')
-    parser.add_argument('--tokens_min_length', type=int, required=True, help='Minimum length of tokens in the dataset')
-    parser.add_argument('--use_accelerator', type=str2bool, required=True, default=False, help='Whether to use accelerator')
-    '''
-   #main("test3", model_name='pythia-70m-deduped', model_checkpoint='main', dataset_name='pile_uncopyrighted_parquet_test', dataset_subset=[0], tokens_min_length=1024*10, use_accelerator=False)

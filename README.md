@@ -18,45 +18,6 @@ This project primarily consists of two parts: `Run_experiment` and `JobSubmissio
 
 ## Configuration
 This project uses a configuration dictionary to control various aspects of the experiments. Here's an explanation of the default configuration:
-### General Settings
-
-session_name: Name of the session, used for the saving directory.
-session_path: Path for the saving directory.
-ctx_len: Context length for the experiment.
-batch_size: Batch size for the experiment.
-multiprocessing: Boolean flag to enable or disable multiprocessing.
-multiprocessing_num_cpus: Number of CPUs to use if multiprocessing is enabled.
-verbose: Boolean flag to control detailed output during the experiment.
-
-### Model Configuration
-
-model_name: Name of the model to be used (e.g., 'llama-7b').
-model_checkpoint: Model checkpoint to use.
-use_accelerator: Boolean flag to enable or disable the use of an accelerator.
-module_name_mapping: Dictionary mapping module names to their paths in the model architecture.
-
-### Dataset Configuration
-
-dataset_name: Name of the dataset to be used.
-dataset_subset: Subset of the dataset to use.
-max_dataset_size: Maximum size of the dataset.
-filter_and_chunk_config: Configuration for filtering and chunking the dataset.
-
-min_chunks_from_a_document: Minimum number of chunks to extract from a document.
-max_chunks_from_a_document: Maximum number of chunks to extract from a document.
-
-
-
-### Caching Configuration
-
-layer_idx_list: List of layer indices to cache.
-module_inblock_keys: Keys for in-block modules to cache.
-module_outblock_keys: Keys for out-block modules to cache.
-save_fp: Floating point precision for saving (e.g., 'torch.float16').
-save_cache_tensors: Boolean flag to save cache tensors (whole IC manifold).
-save_mean_tensors: Boolean flag to save mean cache tensors (center of IC manifold).
-save_IDs: Boolean flag to save IDs (IDs of IC manifolds).
-save_IDs_list: List of ID types to save.
 
 ### Example Configuration
 
@@ -101,3 +62,41 @@ default_config = {
     'multiprocessing_num_cpus' : 20,
     'verbose' : True
 }
+
+### General Settings
+
+- `session_name`: Name of the session, used for the saving directory.
+- `session_path`: Path for the saving directory.
+- `ctx_len`: Context length for the experiment.
+- `batch_size`: Batch size for the experiment.
+- `multiprocessing`: Boolean flag to enable or disable multiprocessing.
+- `multiprocessing_num_cpus`: Number of CPUs to use if multiprocessing is enabled.
+- `verbose`: Boolean flag to control detailed output during the experiment.
+
+### Model Configuration
+
+- `model_name`: Name of the model to be used (e.g., 'llama-7b').
+- `model_checkpoint`: Model checkpoint to use.
+- `use_accelerator`: Boolean flag to enable or disable the use of an accelerator.
+- `module_name_mapping`: Dictionary mapping module names to their paths in the model architecture.
+
+### Dataset Configuration
+
+- `dataset_name`: Name of the dataset to be used.
+- `dataset_subset`: Subset of the dataset to use.
+- `max_dataset_size`: Maximum size of the dataset.
+- `filter_and_chunk_config`: Configuration for filtering and chunking the dataset.
+
+    - `min_chunks_from_a_document`: Minimum number of chunks to extract from a document.
+    - `max_chunks_from_a_document`: Maximum number of chunks to extract from a document.
+
+### Caching Configuration
+
+- `layer_idx_list`: List of layer indices to cache.
+- `module_inblock_keys`: Keys for in-block modules to cache.
+- `module_outblock_keys`: Keys for out-block modules to cache.
+- `save_fp`: Floating point precision for saving (e.g., 'torch.float16').
+- `save_cache_tensors`: Boolean flag to save cache tensors (whole IC manifold).
+- `save_mean_tensors`: Boolean flag to save mean cache tensors (center of IC manifold).
+- `save_IDs`: Boolean flag to save IDs (IDs of IC manifolds).
+- `save_IDs_list`: List of ID types to save.

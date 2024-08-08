@@ -42,6 +42,7 @@ def register_hooks(model, module_name_mapping):
     
     return hooks
 
+
 def save_config(config, session_path):
     # Convert config to a dictionary if it's a Bunch object
     if isinstance(config, Bunch):
@@ -86,63 +87,10 @@ def remove_hooks(hooks):
         hook.remove()
     return None
 
-def save_IDs_to_hdf5_worker(args):
-    session_path, module_key, activation, IDs_methods_list, num_samples, next_index = args
-    start_time = time.time()
-    file_path = os.path.join(session_path, f"cache_{module_key}.h5")
-    
-    if not isinstance(activation, np.ndarray):
-        activation = activation.cpu().numpy()
-    
-    with h5py.File(file_path, 'a') as hdf5_file:
-        if 'ID' not in hdf5_file:
-            id_group = hdf5_file.create_group('ID')
-        else:
-            id_group = hdf5_file['ID']
-        
-        for method in IDs_methods_list:
-            if method == 'mle':
-                estimator = id.MLE()
-                dataset_name = 'mle'
-            elif method.startswith('twoNN'):
-                _, f = method.split('_')
-                f = int(f[1:])
-                estimator = id.TwoNN(discard_fraction=f/100)
-                dataset_name = f'twoNN_f{f}'
-            elif method == 'mind_ml':
-                estimator = id.MiND_ML()
-                dataset_name = 'mind_ml'
-            else:
-                raise ValueError(f"Unsupported ID method: {method}")
-            
-            # Process each sample individually
-            id_estimates = []
-            for sample in activation:
-                try:
-                    if np.isnan(sample).any():
-                        imputer = SimpleImputer(strategy='mean')
-                        sample = imputer.fit_transform(sample.reshape(1, -1)).squeeze()
-                    
-                    id_estimate = estimator.fit_transform(sample)
-                    id_estimates.append(id_estimate)
-                except Exception:
-                    id_estimates.append(np.nan)
-            
-            id_estimates = np.array(id_estimates)
-            
-            if dataset_name not in id_group:
-                id_group.create_dataset(dataset_name, shape=(num_samples,), dtype=float)
-            
-            end_index = min(next_index + len(id_estimates), num_samples)
-            id_group[dataset_name][next_index:end_index] = id_estimates
-    
-    end_time = time.time()
-    return module_key, end_time - start_time
-    
 # cache_manager.py
 
 class CacheManager:
-    def __init__(self, session_path, num_samples, ctx_len, embedding_dims, multiprocessing=True, num_cpus=None, verbose=False):
+    def __init__(self, session_path, num_samples, ctx_len, embedding_dims, multiprocessing=True, num_cpus=30, verbose=False):
         self.session_path = session_path
         self.num_samples = num_samples
         self.ctx_len = ctx_len
@@ -150,23 +98,9 @@ class CacheManager:
         self.next_index = 0
         self.current_batch_size = None
         self.multiprocessing = multiprocessing
-        self.verbose = verbose
-        self.num_cpus = num_cpus if num_cpus is not None else mp.cpu_count()
-        self.pool = None
-        
+        self.verbose=verbose
         if self.multiprocessing:
-            self._create_pool()
-
-    def _create_pool(self):
-        if self.pool is None:
-            self.pool = mp.get_context('spawn').Pool(self.num_cpus)
-            if self.verbose:
-                print(f"Created multiprocessing pool with {self.num_cpus} CPUs")
-
-    def __del__(self):
-        if self.pool:
-            self.pool.close()
-            self.pool.join()
+            self.num_cpus = num_cpus if num_cpus is not None else mp.cpu_count()
 
     def save_cache_tensors_to_hdf5(self, cache):
         for module_key, activation in cache.items():
@@ -200,23 +134,85 @@ class CacheManager:
     def save_mean_tensors_to_hdf5(self, cache):
         return 0
 
+    def _save_IDs_to_hdf5_worker(self, session_path, splitted_cache, IDs_methods_list, num_samples, next_index):
+        start_time = time.time()
+        for module_key, activation in splitted_cache.items():
+            file_path = os.path.join(session_path, f"cache_{module_key}.h5")
+            
+            if not isinstance(activation, np.ndarray):
+                activation = activation.cpu().numpy()
+            
+            with h5py.File(file_path, 'a') as hdf5_file:
+                if 'ID' not in hdf5_file:
+                    id_group = hdf5_file.create_group('ID')
+                else:
+                    id_group = hdf5_file['ID']
+                
+                for method in IDs_methods_list:
+                    if method == 'mle':
+                        estimator = id.MLE()
+                        dataset_name = 'mle'
+                    elif method.startswith('twoNN'):
+                        _, f = method.split('_')
+                        f = int(f[1:])
+                        estimator = id.TwoNN(discard_fraction=f/100)
+                        dataset_name = f'twoNN_f{f}'
+                    elif method == 'mind_ml':
+                        estimator = id.MiND_ML()
+                        dataset_name = 'mind_ml'
+                    else:
+                        raise ValueError(f"Unsupported ID method: {method}")
+                    
+                    # Process each sample individually
+                    id_estimates = []
+                    for sample in activation:
+                        try:
+                            # Check if sample contains NaN values
+                            if np.isnan(sample).any():
+                                #print(f"Sample contains NaN values for method {method}. Imputing with mean.")
+                                imputer = SimpleImputer(strategy='mean')
+                                sample = imputer.fit_transform(sample.reshape(1, -1)).squeeze()
+                            
+                            id_estimate = estimator.fit_transform(sample)
+                            id_estimates.append(id_estimate)
+                        except ValueError as ve:
+                            #if "Input X contains NaN" in str(ve):
+                                #print(f"Error calculating ID for method {method}: Input contains NaN values that couldn't be imputed.")
+                            #else:
+                                #print(f"ValueError in ID calculation for method {method}: {str(ve)}")
+                            id_estimates.append(np.nan)
+                        except Exception as e:
+                            #print(f"Unexpected error calculating ID for method {method}: {str(e)}")
+                            id_estimates.append(np.nan)
+                    
+                    id_estimates = np.array(id_estimates)
+                    
+                    if dataset_name not in id_group:
+                        id_group.create_dataset(dataset_name, shape=(num_samples,), dtype=float)
+                    
+                    end_index = min(next_index + len(id_estimates), num_samples)
+                    id_group[dataset_name][next_index:end_index] = id_estimates
+        
+        end_time = time.time()
+        #print(f'Worker took {end_time - start_time}s to process')
 
     def save_IDs_to_hdf5(self, cache, IDs_methods_list):
         if self.multiprocessing:
-            self._create_pool()  # Ensure pool exists
-            args = [(self.session_path, module_key, activation, IDs_methods_list, self.num_samples, self.next_index) 
-                    for module_key, activation in cache.items()]
-            
-            results = self.pool.map(save_IDs_to_hdf5_worker, args)
-            
+            chunk_size = max(1, len(cache) // self.num_cpus)
+            cache_chunks = [dict(list(cache.items())[i:i + chunk_size]) for i in range(0, len(cache), chunk_size)]
+            args = [(self.session_path, chunk, IDs_methods_list,  self.num_samples, self.next_index) for chunk in cache_chunks]
+            import time
+            start_time = time.time()
+            with mp.get_context('spawn').Pool(self.num_cpus) as pool:
+                pool_created_time = time.time()
+                print(f'Pool created in {pool_created_time - start_time}s')
+                pool.starmap(self._save_IDs_to_hdf5_worker, args)
+                pool_done = time.time()
+                print(f'Pool completed in {pool_done - start_time}s')
             if self.verbose:
-                for module_key, processing_time in results:
-                    print(f"Module {module_key} processed in {processing_time:.2f}s")
+                print(f"Parallel processing completed using {self.num_cpus} CPUs")
         else:
-            for module_key, activation in cache.items():
-                result = self._save_IDs_to_hdf5_worker((self.session_path, module_key, activation, IDs_methods_list, self.num_samples, self.next_index))
-                if self.verbose:
-                    print(f"Module {result[0]} processed in {result[1]:.2f}s")
+            self._save_IDs_to_hdf5_worker((cache, IDs_methods_list))
     
     def save_loss_to_hdf5(self, loss):
         file_path = os.path.join(self.session_path, "creloss.h5")
