@@ -1,3 +1,5 @@
+import time
+
 import torch
 import json
 import os
@@ -116,8 +118,8 @@ class CacheManager:
                 if 'activations' not in hdf5_file:
                     hdf5_file.create_dataset('activations', 
                                              shape=(self.num_samples, self.ctx_len, self.embedding_dims),
-                                             dtype=np.float16,
-                                             chunks=True)
+                                             dtype='float16',
+                                             chunks=(1, self.ctx_len, self.embedding_dims))
                 
                 dataset = hdf5_file['activations']
                 
@@ -132,13 +134,81 @@ class CacheManager:
     def save_mean_tensors_to_hdf5(self, cache):
         return 0
 
+    def _save_IDs_to_hdf5_worker(self, session_path, splitted_cache, IDs_methods_list, num_samples, next_index):
+        start_time = time.time()
+        for module_key, activation in splitted_cache.items():
+            file_path = os.path.join(session_path, f"cache_{module_key}.h5")
+            
+            if not isinstance(activation, np.ndarray):
+                activation = activation.cpu().numpy()
+            
+            with h5py.File(file_path, 'a') as hdf5_file:
+                if 'ID' not in hdf5_file:
+                    id_group = hdf5_file.create_group('ID')
+                else:
+                    id_group = hdf5_file['ID']
+                
+                for method in IDs_methods_list:
+                    if method == 'mle':
+                        estimator = id.MLE()
+                        dataset_name = 'mle'
+                    elif method.startswith('twoNN'):
+                        _, f = method.split('_')
+                        f = int(f[1:])
+                        estimator = id.TwoNN(discard_fraction=f/100)
+                        dataset_name = f'twoNN_f{f}'
+                    elif method == 'mind_ml':
+                        estimator = id.MiND_ML()
+                        dataset_name = 'mind_ml'
+                    else:
+                        raise ValueError(f"Unsupported ID method: {method}")
+                    
+                    # Process each sample individually
+                    id_estimates = []
+                    for sample in activation:
+                        try:
+                            # Check if sample contains NaN values
+                            if np.isnan(sample).any():
+                                print(f"Sample contains NaN values for method {method}. Imputing with mean.")
+                                imputer = SimpleImputer(strategy='mean')
+                                sample = imputer.fit_transform(sample.reshape(1, -1)).squeeze()
+                            
+                            id_estimate = estimator.fit_transform(sample)
+                            id_estimates.append(id_estimate)
+                        except ValueError as ve:
+                            if "Input X contains NaN" in str(ve):
+                                print(f"Error calculating ID for method {method}: Input contains NaN values that couldn't be imputed.")
+                            else:
+                                print(f"ValueError in ID calculation for method {method}: {str(ve)}")
+                            id_estimates.append(np.nan)
+                        except Exception as e:
+                            print(f"Unexpected error calculating ID for method {method}: {str(e)}")
+                            id_estimates.append(np.nan)
+                    
+                    id_estimates = np.array(id_estimates)
+                    
+                    if dataset_name not in id_group:
+                        id_group.create_dataset(dataset_name, shape=(num_samples,), dtype=float)
+                    
+                    end_index = min(next_index + len(id_estimates), num_samples)
+                    id_group[dataset_name][next_index:end_index] = id_estimates
+        
+        end_time = time.time()
+        print(f'Worker took {end_time - start_time}s to process')
+
     def save_IDs_to_hdf5(self, cache, IDs_methods_list):
         if self.multiprocessing:
             chunk_size = max(1, len(cache) // self.num_cpus)
             cache_chunks = [dict(list(cache.items())[i:i + chunk_size]) for i in range(0, len(cache), chunk_size)]
             args = [(self.session_path, chunk, IDs_methods_list,  self.num_samples, self.next_index) for chunk in cache_chunks]
+            import time
+            start_time = time.time()
             with mp.Pool(self.num_cpus) as pool:
-                pool.starmap(_save_IDs_to_hdf5_worker, args)
+                pool_created_time = time.time()
+                print(f'Pool created in {pool_created_time - start_time}s')
+                pool.starmap(self._save_IDs_to_hdf5_worker, args)
+                pool_done = time.time()
+                print(f'Pool completed in {pool_done - start_time}s')
             if self.verbose:
                 print(f"Parallel processing completed using {self.num_cpus} CPUs")
         else:
@@ -166,6 +236,7 @@ class CacheManager:
 
         if self.verbose:
             print(f"Loss saved to {file_path}")
+
 
     def save_entropy_to_hdf5(self, entropy):
         file_path = os.path.join(self.session_path, "entropy.h5")
@@ -216,44 +287,3 @@ class CacheManager:
         self.current_batch_size = None
 
 
-def _save_IDs_to_hdf5_worker(session_path, splitted_cache, IDs_methods_list, num_samples, next_index):
-    for module_key, activation in splitted_cache.items():
-        file_path = os.path.join(session_path, f"cache_{module_key}.h5")
-        
-        if not isinstance(activation, np.ndarray):
-            activation = activation.cpu().numpy()
-        
-        if activation.ndim == 3:
-            activation_2d = activation.reshape(-1, activation.shape[-1])
-        else:
-            activation_2d = activation
-
-        with h5py.File(file_path, 'a') as hdf5_file:
-            if 'ID' not in hdf5_file:
-                id_group = hdf5_file.create_group('ID')
-            else:
-                id_group = hdf5_file['ID']
-
-            for method in IDs_methods_list:
-                if method == 'mle':
-                    estimator = id.MLE()
-                    dataset_name = 'mle'
-                elif method.startswith('twoNN'):
-                    _, f = method.split('_')
-                    f = int(f[1:])
-                    estimator = id.TwoNN(discard_fraction=f/100)
-                    dataset_name = f'twoNN_f{f}'
-                elif method == 'mind_ml':
-                    estimator = id.MiND_ML()
-                    dataset_name = 'mind_ml'
-                else:
-                    raise ValueError(f"Unsupported ID method: {method}")
-
-                id_estimate = estimator.fit_transform(activation_2d)
-
-                if dataset_name not in id_group:
-                    id_group.create_dataset(dataset_name, data=id_estimate,shape=(num_samples))
-                
-                end_index = min(next_index + len(id_estimate), num_samples)
-                
-                id_group[dataset_name][next_index:end_index] = id_estimate

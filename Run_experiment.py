@@ -1,8 +1,7 @@
-import gc
 import os
 from accelerate import Accelerator
-import sys
 from fancy_einsum import einsum
+import time
 
 import transformer_lens.utils as utils
 from transformer_lens.hook_points import (
@@ -22,12 +21,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 from utils import *
-import json
 import argparse
 import concurrent.futures
 from bunch import Bunch
 import yaml
-import h5py
 
 
 def main(config):
@@ -49,6 +46,7 @@ def main(config):
         else:
             if torch.cuda.is_available():
                 model.cuda()
+    model.eval()
 
     ##############################################################################################################################################################################################
     ################################################################################## DATASET ###################################################################################################
@@ -214,10 +212,9 @@ def main(config):
             input_token_ids = input_token_ids.cuda()
 
         with torch.no_grad():
-            outputs = model(input_token_ids)
+            outputs = model(input_token_ids, use_cache=False)
             logits = outputs.logits
             del outputs
-            torch.cuda.empty_cache()
 
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = input_token_ids[:, 1:].contiguous()
@@ -228,9 +225,11 @@ def main(config):
 
             # Calculate entropy from logits
             probs = torch.softmax(shift_logits, dim=-1)
-            entropy = -torch.sum(probs * torch.log(probs + 1e-9), dim=-1)
+            entropy = -torch.sum(probs * torch.log(probs+1e-9), dim=-1)
+            # entropy = -torch.sum(probs * torch.log(probs + 1e-9), dim=-1)
             del probs
             torch.cuda.empty_cache()
+
         return df_metadata, loss.detach(), entropy.detach()
 
 
@@ -249,30 +248,48 @@ def main(config):
 
     # Iterate over the dataset with batch size
     for i in range(0, len(processed_dataset), batch_size):
+
+        start_time = time.time()
+
         batch = processed_dataset[i:i + batch_size]
         df_metadata, loss, entropy = run_batch_with_cache(batch)
 
-        # save 
-        #    save_scheme = "save_all"
-        #    save_scheme = "IDonly"
-        #    save_scheme = "ID_and_clusters"
-        #
-        if config.cacheing_config.save_cache_tensors : 
+        forward_pass_time = time.time()
+        print(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
+
+        if config.cacheing_config.save_cache_tensors:
+            cache_tensors_start = time.time()
             cache_manager.save_cache_tensors_to_hdf5(cache)
-        if config.cacheing_config.save_mean_tensors : 
+            cache_tensors_end = time.time()
+            print(f"Save cache tensors time consumed: {cache_tensors_end - cache_tensors_start:.4f} seconds")
+
+        if config.cacheing_config.save_mean_tensors:
+            mean_tensors_start = time.time()
             cache_manager.save_mean_tensors_to_hdf5(cache)
-            
-        if config.cacheing_config.save_IDs : 
+            mean_tensors_end = time.time()
+            print(f"Save mean tensors time consumed: {mean_tensors_end - mean_tensors_start:.4f} seconds")
+
+        if config.cacheing_config.save_IDs:
+            ids_start = time.time()
             cache_manager.save_IDs_to_hdf5(cache, config.cacheing_config.save_IDs_list)
+            ids_end = time.time()
+            print(f"Save IDs time consumed: {ids_end - ids_start:.4f} seconds")
+
+        # Save loss, entropy, and metadata without individual time checks
         cache_manager.save_loss_to_hdf5(loss)
-        cache_manager.save_entropy_to_hdf5(entropy)        
+        cache_manager.save_entropy_to_hdf5(entropy)
         cache_manager.save_metadata_to_files(df_metadata)
+
+        total_end_time = time.time()
+        print(f"Total cache save time consumed: {total_end_time - forward_pass_time:.4f} seconds")
+        print(f"Total process time consumed: {total_end_time - start_time:.4f} seconds")
 
         # Increment the cache_manager and sanity check
         cache_manager.check_and_increment_index()
         clear_gpu_memory(cache)
         print(f"{i} to {i+batch_size} done / vectors, loss and entropy are calculated and saved.")
         
+
 
     # Remove hooks after processing
     remove_hooks(hooks)
@@ -321,7 +338,7 @@ if __name__ == "__main__":
             "module_inblock_keys": ['mlp', 'attn', 'block'],
             "module_outblock_keys": ['emb', 'unemb'],
             "save_fp": "torch.float16",
-            "save_cache_tensors":True,
+            "save_cache_tensors":True, # -> 
             "save_mean_tensors":True,
             "save_IDs":True,
             "save_IDs_list": ['mle','mind_ml', 'twoNN_f10'],

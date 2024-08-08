@@ -25,9 +25,6 @@ import json
 
 
 
-
-
-
 BASIC_MODEL_TYPES = ['llama-7b', 'mistral-7b']
 ATTENTION_ONLY_MODEL_TYPES = ['attn-only-1l', 'attn-only-2l', 'attn-only-3l', 'attn-only-4l']
 GPT2_TYPES = ['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
