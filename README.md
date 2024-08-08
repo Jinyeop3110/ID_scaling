@@ -10,16 +10,16 @@ To install this project, you will need to have the necessary libraries installed
 
 pip install library1 library2 .
 
-This project primarily consists of two parts: `Run_experiment` and `JobSubmission`.
+This project primarily consists of two parts: `Run_experiment.py` and `JobSubmission.ipynb`.
 
 ### Run_experiment
 
-`Run_experiment` is the main script for running the experiments. It takes care of initializing the experiment, running the experiment, and saving the results. To run an experiment, you can use the following command:
+`Run_experiment.py` is the main script for running the experiments. It takes care of initializing the experiment, running the experiment, and saving the results. To run an experiment, you can use the following command:
 
 ## Configuration
 This project uses a configuration dictionary to control various aspects of the experiments. Here's an explanation of the default configuration:
 
-### Example Configuration
+### Example of Configuration (Llama2-7b)
 
 ```python
 default_config = {
