@@ -5,55 +5,43 @@ import json
 import os
 from bunch import Bunch
 
-def clear_gpu_memory(*args):
-    """
-    Clears specified PyTorch tensors or models from GPU memory, then clears the GPU memory cache.
-    
-    Args:
-    *args: Variable length argument list. Expected to be PyTorch tensors or models.
-    """
-    # Attempt to delete each passed argument
-    for arg in args:
-        # Check if the argument is a tensor and is on GPU
-        if isinstance(arg, torch.Tensor) and arg.is_cuda:
-            # Delete the argument to release its GPU memory
-            del arg
-        # If it's a model or other structure with parameters
-        elif hasattr(arg, 'parameters'):
-            # Delete each parameter to release its GPU memory
-            for param in arg.parameters():
-                if param.is_cuda:
-                    del param
-    
-    # Explicitly collect garbage
-    gc.collect()
-    
-    # Empty the CUDA cache
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-        print("GPU memory cache has been emptied.")
-
-
-def clear_gpu_memory(cache):
-    for key in list(cache.keys()):
-        del cache[key]
-    torch.cuda.empty_cache()
-
-def recursive_bunchify(dictionary):
-    for key, value in dictionary.items():
-        if isinstance(value, dict):
-            dictionary[key] = recursive_bunchify(value)
-    return Bunch(dictionary)
-
-def recursive_unbunchify(obj):
-    """
-    Recursively convert Bunch objects to dictionaries.
-    """
-    if isinstance(obj, Bunch):
-        return {key: recursive_unbunchify(value) for key, value in obj.items()}
-    elif isinstance(obj, dict):
-        return {key: recursive_unbunchify(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [recursive_unbunchify(element) for element in obj]
-    else:
-        return obj
+LLAMA_config= {
+        "session_name": "test",
+        "session_path": "Data/test", #NFS remote folder?
+        "model_config": {
+            "model_name" :'llama-7b',
+            "model_checkpoint": "main",
+            "use_accelerator" : False,
+            "module_name_mapping":{
+                "mlp":"model.layers.{layer}.mlp",
+                "attn":"model.layers.{layer}.self_attn",
+                "block":"model.layers.{layer}",
+                "emb":"model.embed_tokens",
+                "unemb":"model.norm",
+            }
+        },
+        "dataset_config": {
+            "dataset_name" : "pile_uncopyrighted_parquet_test",
+            "dataset_subset" : [0],
+            "max_dataset_size" : 1000,
+            "filter_and_chunk_config" : {
+                "min_chunks_from_a_document" : 5,
+                "max_chunks_from_a_document" : 5
+            }
+        },
+        "ctx_len": 1024,
+        "batch_size": 2,
+        "cacheing_config" : {
+            "layer_idx_list": [0,1,2,5,10,15],  # Convert numpy array to list
+            "module_inblock_keys": ['mlp', 'attn', 'block'],
+            "module_outblock_keys": [ 'unemb'],
+            "save_fp": "torch.float16",
+            "save_cache_tensors":True, # -> 
+            "save_mean_tensors":True,
+            "save_IDs":True,
+            "save_IDs_list": ['mle','mind_ml', 'twoNN_f10'],
+        },
+        'multiprocessing' : True,
+        'multiprocessing_num_cpus' : 30,
+        'verbose' : True
+    }

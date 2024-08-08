@@ -260,33 +260,33 @@ def main(config):
 
         if config.cacheing_config.save_cache_tensors:
             cache_tensors_start = time.time()
-            cache_manager.save_cache_tensors_to_hdf5(cache)
+            cache_manager.save_cache_tensors(cache)
             cache_tensors_end = time.time()
             print(f"Save cache tensors time consumed: {cache_tensors_end - cache_tensors_start:.4f} seconds")
 
         if config.cacheing_config.save_mean_tensors:
             mean_tensors_start = time.time()
-            cache_manager.save_mean_tensors_to_hdf5(cache)
+            cache_manager.save_mean_tensors(cache)
             mean_tensors_end = time.time()
             print(f"Save mean tensors time consumed: {mean_tensors_end - mean_tensors_start:.4f} seconds")
 
         if config.cacheing_config.save_IDs:
             ids_start = time.time()
-            cache_manager.save_IDs_to_hdf5(cache, config.cacheing_config.save_IDs_list)
+            cache_manager.save_IDs(cache, config.cacheing_config.save_IDs_list)
             ids_end = time.time()
             print(f"Save IDs time consumed: {ids_end - ids_start:.4f} seconds")
 
         # Save loss, entropy, and metadata without individual time checks
-        cache_manager.save_loss_to_hdf5(loss)
-        cache_manager.save_entropy_to_hdf5(entropy)
-        cache_manager.save_metadata_to_files(df_metadata)
+        cache_manager.save_loss(loss)
+        cache_manager.save_entropy(entropy)
+        cache_manager.save_metadata(df_metadata)
 
         total_end_time = time.time()
         print(f"Total cache save time consumed: {total_end_time - forward_pass_time:.4f} seconds")
         print(f"Total process time consumed: {total_end_time - start_time:.4f} seconds")
 
         # Increment the cache_manager and sanity check
-        cache_manager.check_and_increment_index()
+        cache_manager.check_and_increment_index(increment=len(df_metadata))
         clear_gpu_memory(cache)
         print(f"{i} to {i+batch_size} done / vectors, loss and entropy are calculated and saved.")
         
@@ -326,7 +326,7 @@ if __name__ == "__main__":
         "dataset_config": {
             "dataset_name" : "pile_uncopyrighted_parquet_test",
             "dataset_subset" : [0],
-            "max_dataset_size" : 1000,
+            "max_dataset_size" : 100,
             "filter_and_chunk_config" : {
                 "min_chunks_from_a_document" : 5,
                 "max_chunks_from_a_document" : 5
@@ -335,9 +335,9 @@ if __name__ == "__main__":
         "ctx_len": 1024,
         "batch_size": 2,
         "cacheing_config" : {
-            "layer_idx_list": [0,1,2,5],  # Convert numpy array to list
+            "layer_idx_list": [0,1,10,15,31],  # Convert numpy array to list
             "module_inblock_keys": ['mlp', 'attn', 'block'],
-            "module_outblock_keys": ['unemb'],
+            "module_outblock_keys": [ 'unemb'],
             "save_fp": "torch.float16",
             "save_cache_tensors":True, # -> 
             "save_mean_tensors":True,
@@ -345,7 +345,7 @@ if __name__ == "__main__":
             "save_IDs_list": ['mle','mind_ml', 'twoNN_f10'],
         },
         'multiprocessing' : True,
-        'multiprocessing_num_cpus' : 20,
+        'multiprocessing_num_cpus' : 30,
         'verbose' : True
     }
 
