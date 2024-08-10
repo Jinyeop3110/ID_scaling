@@ -9,6 +9,7 @@ from transformer_lens.hook_points import (
 )  # Hooking utilities
 from transformers import AutoTokenizer, pipeline, logging, AutoModelForCausalLM, AutoConfig
 from transformer_lens import ActivationCache, HookedTransformer
+from transformers import  GemmaForCausalLM  # Explicitly import Gemma classes
 
 from huggingface_hub import notebook_login
 from datasets import Dataset
@@ -25,7 +26,7 @@ import json
 
 
 
-BASIC_MODEL_TYPES = ['llama-7b', 'mistral-7b']
+BASIC_MODEL_TYPES = ['llama2-7b', 'mistral-7b', 'gemma-2b', 'gemma-7b']
 ATTENTION_ONLY_MODEL_TYPES = ['attn-only-1l', 'attn-only-2l', 'attn-only-3l', 'attn-only-4l']
 GPT2_TYPES = ['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
 OLMO_TYPES = ['olmo-1b', 'olmo-7b']
@@ -86,7 +87,7 @@ def load_olmo_models(model_type, checkpoint, set_grad_enabled):
     tokenizer_path = model_path
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path , trust_remote_code=True)
     
-    model = AutoModelForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, trust_remote_code=True )
+    model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True )
     for param in model.parameters():
         param.requires_grad = False
     model.eval()
@@ -141,8 +142,9 @@ def load_basic_models(model_type, set_grad_enabled=False):
     torch.set_grad_enabled(set_grad_enabled)
 
     model_paths = {
-        'llama-7b': "../Models/Llama-2-7b-hf",
+        'llama2-7b': "../Models/Llama-2-7b-hf",
         'mistral-7b': "../Models/Mistral-7B-v0.1",
+        'gemma-7b': "../Models/Gemma-7B",
     }
 
 
@@ -151,9 +153,22 @@ def load_basic_models(model_type, set_grad_enabled=False):
     if not model_path:
         raise ValueError(f"Unsupported model type: {model_type}")
     print(f"Trying to load model : {model_type} from {model_path}")
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path , trust_remote_code=True)
-    
-    model = AutoModelForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True)
+
+    '''
+    if model_type.startswith('gemma'):
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+            model = GemmaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, trust_remote_code=True)
+        except Exception as e:
+            print(f"Error loading Gemma model: {e}")
+            print("Falling back to AutoTokenizer and AutoModelForCausalLM")
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, trust_remote_code=True)
+    else:
+    '''
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, trust_remote_code=True)
+
     for param in model.parameters():
         param.requires_grad = False
     model.eval()

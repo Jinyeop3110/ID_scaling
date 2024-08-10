@@ -86,28 +86,36 @@ def main(config):
         print(f"Filtered dataset size: {len(dataset)}")
 
         def chunk_dataset_with_tokenizer(dataset, tokenizer, chunk_size, max_chunk_idx, offset):
-            def chunk_text_with_meta(data, tokenizer, chunk_size, max_chunk_idx, offset):
+            def chunk_text_with_meta(data, tokenizer, chunk_size, max_chunk_idx, offset, return_text=False):
                 full_text = data['text']
                 chunks = []
                 tokens = tokenizer.encode(full_text, truncation=False)
-                start = 1 # Remove BOS
+                
+                # Check if the tokenizer has a BOS token
+                has_bos = hasattr(tokenizer, 'bos_token_id') and tokenizer.bos_token_id is not None
+                start = 1 if has_bos else 0
+                
                 while start < len(tokens):
-                    end = start + chunk_size-1
+                    end = start + (chunk_size - 1 if has_bos else chunk_size)
                     chunk_tokens = tokens[start:end]
                     chunks.append(chunk_tokens)
                     if len(chunks) >= max_chunk_idx:
                         break
-                    start += chunk_size -1 + offset
-
+                    start += (chunk_size - 1 if has_bos else chunk_size) + offset
+                
                 new_data = []
                 for j, chunk in enumerate(chunks):
-                    new_entry = {'id': f"{data['id']}-{j}", 'tokens':[tokenizer.bos_token_id]+chunk}
+                    new_entry = {
+                        'id': f"{data['id']}-{j}", 
+                        'tokens': ([tokenizer.bos_token_id] if has_bos else []) + chunk
+                    }
                     for key, value in data.items():
                         if key not in ['id', 'tokens', 'text']:
                             new_entry[key] = value
-                        if return_text:
-                            new_entry['text']= tokenizer.decode(chunk, skip_special_tokens=False)
+                    if return_text:
+                        new_entry['text'] = tokenizer.decode(new_entry['tokens'], skip_special_tokens=False)
                     new_data.append(new_entry)
+                
                 return new_data
 
             new_data = []
@@ -119,10 +127,11 @@ def main(config):
             return chunked_dataset
         
         chunked_tokenized_dataset=chunk_dataset_with_tokenizer(filtered_dataset, tokenizer, chunk_size=ctx_len, max_chunk_idx=filtering_config.max_chunks_from_a_document, offset=50)
-        return chunked_tokenized_dataset
+        return chunked_tokenized_dataset.select(np.arange(10000))
     
     processed_dataset = process_dataset(dataset, tokenizer, config.ctx_len, config.dataset_config.filter_and_chunk_config, return_text=True, offset=50)
-    
+    print(f"Filtered dataset size: {len(processed_dataset)}")
+
     #chunked_tokenized_datsaet=some function
 
 
@@ -288,7 +297,7 @@ def main(config):
         # Increment the cache_manager and sanity check
         cache_manager.check_and_increment_index(increment=len(df_metadata))
         clear_gpu_memory(cache)
-        print(f"{i} to {i+batch_size} done / vectors, loss and entropy are calculated and saved.")
+        print(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
         
 
 
@@ -312,7 +321,7 @@ if __name__ == "__main__":
         "session_name": "test",
         "session_path": "/home/gridsan/jsong/physics_dl_shared/ML_JY/ID_scaling/Data/test", #NFS remote folder?
         "model_config": {
-            "model_name" :'llama-7b',
+            "model_name" :'gemma-7b',
             "model_checkpoint": "main",
             "use_accelerator" : False,
             "module_name_mapping":{
@@ -349,11 +358,14 @@ if __name__ == "__main__":
         'verbose' : True
     }
 
+    config=default_config
     # If a configuration file was provided, load it and overwrite the default configuration
     if args.config_path is not None:
+        config={}
         with open(args.config_path, 'r') as f:
             config_from_file = yaml.safe_load(f)
         config.update(config_from_file)
+    
 
-    config = recursive_bunchify(default_config)
+    config = recursive_bunchify(config)
     main(config)
