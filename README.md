@@ -6,9 +6,11 @@ This project provides the basis for ID scaling code. It is designed to save and 
 
 ## Installation
 
-To install this project, you will need to have the necessary libraries installed. You can determine which libraries are used by examining the import statements at the top of the script files. Once you have a list of the necessary libraries, you can install them using pip:
-
-pip install library1 library2 .
+```{bash}
+mamba env create -n id -f environment.yml
+mamba activate id
+pip install -e .
+```
 
 This project primarily consists of two parts: `Run_experiment.py` and `JobSubmission.ipynb`.
 
