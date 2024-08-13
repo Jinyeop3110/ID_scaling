@@ -1,32 +1,11 @@
 #import transformer_lens
+from pathlib import Path
 
-import sys
-from fancy_einsum import einsum
-
-import transformer_lens.utils as utils
-from transformer_lens.hook_points import (
-    HookPoint,
-)  # Hooking utilities
-from transformers import AutoTokenizer, pipeline, logging, AutoModelForCausalLM, AutoConfig
-from transformer_lens import ActivationCache, HookedTransformer
-from transformers import  GemmaForCausalLM  # Explicitly import Gemma classes
-
-from huggingface_hub import notebook_login
-from datasets import Dataset
-import pandas as pd
-import transformers
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
-import einops  # Make sure einops is imported
-from pathlib import Path
 
-from typing import Optional, Union, Literal
-from transformer_lens.loading_from_pretrained import *
-from pathlib import Path
-import json
-
-
-
-BASIC_MODEL_TYPES = ['llama2-7b', 'mistral-7b', 'gemma-2b', 'gemma-7b']
+# TODO: need to fix this paths
+BASIC_MODEL_TYPES = ['llama2-7b', 'mistral-7b', 'gemma-2b', 'gemma-7b', 'mistralai/Mistral-7B-Instruct-v0.1']
 ATTENTION_ONLY_MODEL_TYPES = ['attn-only-1l', 'attn-only-2l', 'attn-only-3l', 'attn-only-4l']
 GPT2_TYPES = ['gpt2-small', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
 OLMO_TYPES = ['olmo-1b', 'olmo-7b']
@@ -141,7 +120,8 @@ def load_basic_models(model_type, set_grad_enabled=False):
 
     model_paths = {
         'llama2-7b': "../Models/Llama-2-7b-hf",
-        'mistral-7b': "../Models/Mistral-7B-v0.1",
+        'mistral-7b': "mistralai/Mistral-7B-v0.1",
+        'mistralai/Mistral-7B-Instruct-v0.1': 'mistralai/Mistral-7B-Instruct-v0.1',
         'gemma-7b': "../Models/Gemma-7B",
     }
 

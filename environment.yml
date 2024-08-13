@@ -28,6 +28,7 @@ dependencies:
   - azure-storage-common-cpp=12.7.0=hcf3b6fd_1
   - azure-storage-files-datalake-cpp=12.11.0=h082e32e_1
   - brotli-python=1.1.0=py310h1253130_1
+  - bunch=1.0.1=py_1
   - bzip2=1.0.8=h99b78c6_7
   - c-ares=1.32.3=h99b78c6_0
   - ca-certificates=2024.7.4=hf0a4a13_0
@@ -170,4 +171,19 @@ dependencies:
   - yarl=1.9.4=py310hd125d64_0
   - zstandard=0.23.0=py310hd9c37c8_0
   - zstd=1.5.6=hb46c0d2_0
+  - pip:
+      - contourpy==1.2.1
+      - cycler==0.12.1
+      - fonttools==4.53.1
+      - id-scaling==0.1.dev16
+      - joblib==1.4.2
+      - kiwisolver==1.4.5
+      - llvmlite==0.43.0
+      - matplotlib==3.9.1.post1
+      - numba==0.60.0
+      - pyparsing==3.1.2
+      - scikit-dimension==0.3.4
+      - scikit-learn==1.5.1
+      - scipy==1.14.0
+      - threadpoolctl==3.5.0
 prefix: /Users/seungwookhan/miniforge3/envs/id

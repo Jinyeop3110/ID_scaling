@@ -13,17 +13,22 @@ from rich.logging import RichHandler
 
 from id_scaling.model import load_model_and_tokenizer
 from id_scaling.data import load_dataset, process_dataset
-from utils import *
+from id_scaling.utils import *
+from id_scaling.cache import *
+from id_scaling.configs.default_config import DefaultConfig
+from id_scaling.utils.config_utils import update_config_from_yaml
+
 
 ######### LOGGING #########
 logger = logging.getLogger("rich")
 logging.basicConfig(level=logging.INFO, handlers=[RichHandler()])
 
 
-def main(config):
+def main(config: DefaultConfig):
     session_path = config.session_path  # Update this to your desired path
     
     ######### MODEL #########
+    logger.info('')
     model, tokenizer = load_model_and_tokenizer(config.model_config)
     if torch.cuda.is_available():
         if config.model_config.use_accelerator:
@@ -36,21 +41,16 @@ def main(config):
 
 
     ######### DATASET #########
-    dataset = load_dataset(config.dataset_config)
+    dataset = load_dataset(config.dataset_config, supercloud=config.supercloud)
     print(f"Original dataset size: {len(dataset)}")
 
 
     ######### DATASET PREPROCESSING #########
     processed_dataset = process_dataset(dataset, tokenizer, config.ctx_len, config.dataset_config.filter_and_chunk_config, return_text=True, offset=50)
-    print(f"Filtered dataset size: {len(processed_dataset)}")
-
-    #chunked_tokenized_datsaet=some function
+    print(f"Processed dataset size: {len(processed_dataset)}")
 
 
-    
-    ##############################################################################################################################################################################################
-    ################################################################################## Module Names ################################################################################################
-    ##############################################################################################################################################################################################
+    ######### SETTING MODULE NAMES #########
     batch_size = config.batch_size
 
     def create_module_names(module_name_mapping, layer_idx_list, module_inblock_keys, module_outblock_keys):
@@ -212,7 +212,6 @@ def main(config):
         print(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
         
 
-
     # Remove hooks after processing
     remove_hooks(hooks)
 
@@ -223,61 +222,23 @@ if __name__ == "__main__":
 
     # Add the arguments
     parser.add_argument('--config_path', type=str, help='The path to the configuration file')
-    # Yaml <- json
+    parser.add_argument('--supercloud', action='store_true', help='Use the supercloud setup', default=False)
 
     # Parse the arguments
     args = parser.parse_args()
 
-    # Default configuration
-    default_config = {
-        "session_name": "test",
-        "session_path": "/home/gridsan/jsong/physics_dl_shared/ML_JY/ID_scaling/Data/test", #NFS remote folder?
-        "model_config": {
-            "model_name" :'gemma-7b',
-            "model_checkpoint": "main",
-            "use_accelerator" : False,
-            "module_name_mapping":{
-                "mlp":"model.layers.{layer}.mlp",
-                "attn":"model.layers.{layer}.self_attn",
-                "block":"model.layers.{layer}",
-                "emb":"model.embed_tokens",
-                "unemb":"model.norm",
-            }
-        },
-        "dataset_config": {
-            "dataset_name" : "pile_uncopyrighted_parquet_test",
-            "dataset_subset" : [0],
-            "max_dataset_size" : 100,
-            "filter_and_chunk_config" : {
-                "min_chunks_from_a_document" : 5,
-                "max_chunks_from_a_document" : 5
-            }
-        },
-        "ctx_len": 1024,
-        "batch_size": 2,
-        "cacheing_config" : {
-            "layer_idx_list": [0,1,10,15,31],  # Convert numpy array to list
-            "module_inblock_keys": ['mlp', 'attn', 'block'],
-            "module_outblock_keys": [ 'unemb'],
-            "save_fp": "torch.float16",
-            "save_cache_tensors":True, # -> 
-            "save_mean_tensors":True,
-            "save_IDs":True,
-            "save_IDs_list": ['mle','mind_ml', 'twoNN_f10'],
-        },
-        'multiprocessing' : True,
-        'multiprocessing_num_cpus' : 30,
-        'verbose' : True
-    }
+    config = DefaultConfig()
 
-    config=default_config
     # If a configuration file was provided, load it and overwrite the default configuration
     if args.config_path is not None:
-        config={}
-        with open(args.config_path, 'r') as f:
-            config_from_file = yaml.safe_load(f)
-        config.update(config_from_file)
-    
+        logger.info(f'Updating configuration from file {args.config_path}...')
+        update_config_from_yaml(config, args.config_path)
 
-    config = recursive_bunchify(config)
+    # If the supercloud flag is set, update the configuration
+    if args.supercloud:
+        logger.info('Updating configuration for supercloud...')
+        config.supercloud = True
+    else:
+        config.supercloud = False
+
     main(config)

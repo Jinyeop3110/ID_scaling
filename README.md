@@ -12,6 +12,8 @@ mamba activate id
 pip install -e .
 ```
 
+One can use `conda` instead of `mamba`.
+
 This project primarily consists of two parts: `Run_experiment.py` and `JobSubmission.ipynb`.
 
 ### Run_experiment

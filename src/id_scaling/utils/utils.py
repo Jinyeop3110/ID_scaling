@@ -57,3 +57,38 @@ def recursive_unbunchify(obj):
         return [recursive_unbunchify(element) for element in obj]
     else:
         return obj
+    
+    
+def save_config(config, session_path):
+    # Convert config to a dictionary if it's a Bunch object
+    if isinstance(config, Bunch):
+        config_dict = recursive_unbunchify(config)
+    elif isinstance(config, dict):
+        config_dict = config
+    else:
+        raise TypeError("Config must be either a dictionary or a Bunch object")
+
+    # Debug: Print the config_dict to check its structure
+    print("Config dictionary structure:")
+    print(config_dict)
+
+    # Ensure all items in config_dict are proper key-value pairs
+    for key, value in config_dict.items():
+        if isinstance(value, dict):
+            if not all(isinstance(k, str) for k in value.keys()):
+                raise ValueError(f"All keys in nested dictionaries must be strings. Check the value for key '{key}'")
+
+    # Ensure the session path exists
+    os.makedirs(session_path, exist_ok=True)
+
+    # Save the config as YAML
+    yaml_path = os.path.join(session_path, "config.yaml")
+    try:
+        with open(yaml_path, 'w') as yaml_file:
+            yaml.dump(config_dict, yaml_file, default_flow_style=False)
+    except Exception as e:
+        print(f"Error while saving YAML: {e}")
+        print(f"Problematic config_dict: {config_dict}")
+        raise
+
+    print(f"Config saved successfully to {yaml_path}")
