@@ -1,28 +1,25 @@
 import time
 import os
 import multiprocessing as mp
+from typing import Union
+from pathlib import Path
+import logging
 
-import torch
 import numpy as np
 import skdim.id as id
+from sklearn.impute import SimpleImputer
 import h5py
+from rich.logging import RichHandler
 
 from id_scaling.utils import *
 
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+# set up logging
+######### LOGGING #########
+logger = logging.getLogger("rich")
+logging.basicConfig(level=logging.INFO, handlers=[RichHandler()])
+
 mp.set_start_method('spawn', force=True)
 
-# Global variable to store module names # TODO: what's the purpose of this?
-MODULE_NAME_KEYS = {}
-
-# Save metadata to files
-
-
-# Remove hooks after processing
-def remove_hooks(hooks):
-    for hook in hooks:
-        hook.remove()
-    return None
 
 def subprocess_save_IDs_to_hdf5_worker(args):
     session_path, module_key, activation, IDs_methods_list, num_samples, next_index = args
@@ -141,8 +138,13 @@ def subprocess_save_mean_tensor_to_hdf5_worker(args):
 
 
 class CacheManager:
-    def __init__(self, session_path, num_samples, ctx_len, embedding_dims, multiprocessing=True, num_cpus=None, verbose=False):
+    def __init__(self, session_path: Union[Path, str], save_cache_tensors: bool, save_mean_tensors: bool, save_ids: bool,
+                 num_samples: int, ctx_len: int, embedding_dims: int, multiprocessing: bool = True, num_cpus: int = None, 
+                 verbose: bool = False):
         self.session_path = session_path
+        self.to_save_cache_tensors = save_cache_tensors
+        self.to_save_mean_tensors = save_mean_tensors
+        self.to_save_ids = save_ids
         self.num_samples = num_samples
         self.ctx_len = ctx_len
         self.embedding_dims = embedding_dims
@@ -166,11 +168,18 @@ class CacheManager:
             self.pool.close()
             self.pool.join()
                 
+
+    @staticmethod
     def save_cache_tensors(self, cache):
+        if not self.to_save_cache_tensors:
+            logging.info('Skipping saving cache tensors')
+            return
+        
+        start = time.time()
         if self.multiprocessing:
             self._create_pool()  # Ensure pool exists
             args = [(self.session_path, module_key, activation, self.num_samples, 
-                     self.next_index, self.ctx_len, self.embedding_dims, self.verbose)
+                    self.next_index, self.ctx_len, self.embedding_dims, self.verbose)
                     for module_key, activation in cache.items()]
             results = self.pool.map(subprocess_save_cache_tensor_to_hdf5_worker, args)
             if self.verbose:
@@ -179,12 +188,21 @@ class CacheManager:
         else:
             for module_key, activation in cache.items():
                 result = subprocess_save_cache_tensor_to_hdf5_worker((self.session_path, module_key, activation, 
-                                                           self.num_samples, self.next_index, 
-                                                           self.ctx_len, self.embedding_dims, self.verbose))
+                                                        self.num_samples, self.next_index, 
+                                                        self.ctx_len, self.embedding_dims, self.verbose))
                 if self.verbose:
                     print(f"Cache tensors for module {result[0]} saved in {result[1]:.2f}s")
 
+        end = time.time()
+        logging.info('Cache tensors saved in {:.2f}s'.format(end - start))
+
+    @staticmethod
     def save_mean_tensors(self, cache):
+        if self.to_save_mean_tensors:
+            logging.info('Skipping saving mean tensors')
+            return
+        
+        start = time.time()
         if self.multiprocessing:
             self._create_pool()  # Ensure pool exists
             args = [(self.session_path, module_key, activation, self.num_samples, 
@@ -201,8 +219,19 @@ class CacheManager:
                                                           self.ctx_len, self.embedding_dims, self.verbose))
                 if self.verbose:
                     print(f"Mean tensors for module {result[0]} saved in {result[1]:.2f}s")
+        
+        end = time.time()
+        logging.info('Mean tensors saved in {:.2f}s'.format(end - start))
 
+
+    @staticmethod
     def save_IDs(self, cache, IDs_methods_list):
+        if not self.to_save_ids:
+            logging.info('Skipping saving IDs')
+            return
+        
+        start = time.time()
+
         if self.multiprocessing:
             self._create_pool()  # Ensure pool exists
             args = [(self.session_path, module_key, activation, IDs_methods_list, self.num_samples, self.next_index) 
@@ -219,6 +248,9 @@ class CacheManager:
                 if self.verbose:
                     print(f"Module {result[0]} processed in {result[1]:.2f}s")
     
+        end = time.time()
+        logging.info('IDs saved in {:.2f}s'.format(end - start))
+
     def save_loss(self, loss):
         file_path = os.path.join(self.session_path, "creloss.h5")
         
@@ -241,6 +273,7 @@ class CacheManager:
 
         if self.verbose:
             print(f"Loss saved to {file_path}")
+
 
     def save_entropy(self, entropy):
         file_path = os.path.join(self.session_path, "entropy.h5")
@@ -265,6 +298,7 @@ class CacheManager:
         if self.verbose:
             print(f"Entropy saved to {file_path}")
 
+
     def save_metadata(self, df_metadata):
         file_path = os.path.join(self.session_path, "metadata.csv")
         if not os.path.isfile(file_path):
@@ -275,6 +309,7 @@ class CacheManager:
         if self.verbose:
             print(f"Metadata saved to {file_path}")
 
+
     def check_and_increment_index(self, increment):
         
         self.next_index += increment
@@ -282,6 +317,7 @@ class CacheManager:
             print("Reached the maximum number of samples. Resetting index to 0.")
             self.next_index = 0
         self.current_batch_size = None
+
 
     def reset(self):
         self.next_index = 0

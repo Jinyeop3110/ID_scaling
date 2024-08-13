@@ -4,11 +4,8 @@ import argparse
 import logging
 
 from accelerate import Accelerator
-from datasets import Dataset
 import pandas as pd
 import torch
-import numpy as np 
-import yaml
 from rich.logging import RichHandler
 
 from id_scaling.model import load_model_and_tokenizer
@@ -17,7 +14,9 @@ from id_scaling.utils import *
 from id_scaling.cache import *
 from id_scaling.configs.default_config import DefaultConfig
 from id_scaling.utils.config_utils import update_config_from_yaml
-from id_scaling.utils.model_utils import create_module_names
+from id_scaling.utils.model_utils import *
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
 ######### LOGGING #########
@@ -94,8 +93,20 @@ def main(config: DefaultConfig):
     ######### RUN EXPERIMENT #########
 
     # Save_tensors with H5py 
-    cache_manager = CacheManager(session_path, num_samples=len(processed_dataset), ctx_len=config.ctx_len, embedding_dims=model.config.hidden_size, multiprocessing=config.multiprocessing, num_cpus=config.multiprocessing_num_cpus, verbose=config.verbose)
+    cache_manager = CacheManager(session_path, \
+                                 save_cache_tensors=config.cacheing_config.save_cache_tensors, \
+                                 save_mean_tensors=config.cacheing_config.save_mean_tensors, \
+                                 save_ids = config.cacheing_config.save_IDs, \
+                                 num_samples=len(processed_dataset), \
+                                 ctx_len=config.ctx_len, \
+                                 embedding_dims=model.config.hidden_size, \
+                                 multiprocessing=config.multiprocessing, \
+                                 num_cpus=config.multiprocessing_num_cpus, \
+                                 verbose=config.verbose)
 
+    # TODO: feed in cache config into the manager, so that it can use the config to save the tensors or not
+
+    
     # Main function to run the experiment
     os.makedirs(session_path, exist_ok=True)
     save_config(config, session_path)
@@ -112,25 +123,12 @@ def main(config: DefaultConfig):
         df_metadata, loss, entropy = run_batch_with_cache(model, batch, config)
 
         forward_pass_time = time.time()
-        print(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
+        logging.info(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
 
-        if config.cacheing_config.save_cache_tensors:
-            cache_tensors_start = time.time()
-            cache_manager.save_cache_tensors(cache)
-            cache_tensors_end = time.time()
-            print(f"Save cache tensors time consumed: {cache_tensors_end - cache_tensors_start:.4f} seconds")
-
-        if config.cacheing_config.save_mean_tensors:
-            mean_tensors_start = time.time()
-            cache_manager.save_mean_tensors(cache)
-            mean_tensors_end = time.time()
-            print(f"Save mean tensors time consumed: {mean_tensors_end - mean_tensors_start:.4f} seconds")
-
-        if config.cacheing_config.save_IDs:
-            ids_start = time.time()
-            cache_manager.save_IDs(cache, config.cacheing_config.save_IDs_list)
-            ids_end = time.time()
-            print(f"Save IDs time consumed: {ids_end - ids_start:.4f} seconds")
+        # Save the tensors to the cache (if enabled)
+        cache_manager.save_cache_tensors(CACHE)
+        cache_manager.save_mean_tensors(CACHE)
+        cache_manager.save_IDs(CACHE, config.cacheing_config.save_IDs_list)
 
         # Save loss, entropy, and metadata without individual time checks
         cache_manager.save_loss(loss)
@@ -143,7 +141,7 @@ def main(config: DefaultConfig):
 
         # Increment the cache_manager and sanity check
         cache_manager.check_and_increment_index(increment=len(df_metadata))
-        clear_gpu_memory(cache)
+        clear_gpu_memory(CACHE)
         print(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
     
     # Remove hooks after processing

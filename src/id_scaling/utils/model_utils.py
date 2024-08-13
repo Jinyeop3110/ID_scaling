@@ -4,7 +4,8 @@ import numpy as np
 
 # Global cache to store outputs
 CACHE = {}
-
+# Global variable to store module names # TODO: what's the purpose of this?
+MODULE_NAME_KEYS = {}
 
 def create_module_names(module_name_mapping, layer_idx_list, module_inblock_keys, module_outblock_keys):
 
@@ -23,6 +24,7 @@ def create_module_names(module_name_mapping, layer_idx_list, module_inblock_keys
 
     return module_name_mapping, module_name_keys
 
+
 def hook_fn_all(module, input, output):
     # Retrieve the full name from the global MODULE_NAME_KEYS
     with torch.no_grad():
@@ -30,6 +32,7 @@ def hook_fn_all(module, input, output):
         if isinstance(output, tuple):
             output = output[0]
         CACHE[full_name] = output.detach().cpu().numpy().astype(np.float16)
+
 
 def register_hooks(model, module_name_mapping):
     hooks = []
@@ -43,3 +46,10 @@ def register_hooks(model, module_name_mapping):
             MODULE_NAME_KEYS[module] = reverse_mapping[name]
     
     return hooks
+
+
+# Remove hooks after processing
+def remove_hooks(hooks):
+    for hook in hooks:
+        hook.remove()
+    return None
