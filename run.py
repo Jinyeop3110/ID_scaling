@@ -7,6 +7,7 @@ from accelerate import Accelerator
 import pandas as pd
 import torch
 from rich.logging import RichHandler
+from tqdm import tqdm
 
 from id_scaling.model import load_model_and_tokenizer
 from id_scaling.data import load_dataset, process_dataset
@@ -109,35 +110,38 @@ def main(config: DefaultConfig):
     # Register hooks
     hooks = register_hooks(model, module_name_mapping)
 
-    # Iterate over the dataset with batch size
-    for i in range(0, len(processed_dataset), batch_size):
+    with tqdm(total=len(processed_dataset)) as pbar:
+        # Iterate over the dataset with batch size
+        for i in range(0, len(processed_dataset), batch_size):
 
-        start_time = time.time()
+            start_time = time.time()
 
-        batch = processed_dataset[i:i + batch_size]
-        df_metadata, loss, entropy = run_batch_with_cache(model, batch, config)
+            batch = processed_dataset[i:i + batch_size]
+            df_metadata, loss, entropy = run_batch_with_cache(model, batch, config)
 
-        forward_pass_time = time.time()
-        logging.info(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
+            forward_pass_time = time.time()
+            logging.info(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
 
-        # Save the tensors to the cache (if enabled)
-        cache_manager.save_cache_tensors(CACHE)
-        cache_manager.save_mean_tensors(CACHE)
-        cache_manager.save_IDs(CACHE, config.cacheing_config.save_IDs_list)
+            # Save the tensors to the cache (if enabled)
+            cache_manager.save_cache_tensors(CACHE)
+            cache_manager.save_mean_tensors(CACHE)
+            cache_manager.save_IDs(CACHE, config.cacheing_config.save_IDs_list)
 
-        # Save loss, entropy, and metadata without individual time checks
-        cache_manager.save_loss(loss)
-        cache_manager.save_entropy(entropy)
-        cache_manager.save_metadata(df_metadata)
+            # Save loss, entropy, and metadata without individual time checks
+            cache_manager.save_loss(loss)
+            cache_manager.save_entropy(entropy)
+            cache_manager.save_metadata(df_metadata)
 
-        total_end_time = time.time()
-        print(f"Total cache save time consumed: {total_end_time - forward_pass_time:.4f} seconds")
-        print(f"Total process time consumed: {total_end_time - start_time:.4f} seconds")
+            total_end_time = time.time()
+            logging.info(f"Total cache save time consumed: {total_end_time - forward_pass_time:.4f} seconds")
+            logging.info(f"Total process time consumed: {total_end_time - start_time:.4f} seconds")
 
-        # Increment the cache_manager and sanity check
-        cache_manager.check_and_increment_index(increment=len(df_metadata))
-        clear_gpu_memory(CACHE)
-        print(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
+            # Increment the cache_manager and sanity check
+            cache_manager.check_and_increment_index(increment=len(df_metadata))
+            clear_gpu_memory(CACHE)
+            logging.info(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
+
+            pbar.update(len(df_metadata))
     
     # Remove hooks after processing
     remove_hooks(hooks)
