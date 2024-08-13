@@ -63,7 +63,7 @@ def main(config: DefaultConfig):
     batch_size = config.batch_size
     
     ######### MODEL #########
-    logger.info('')
+    logger.info('Loading model and tokenizer...')
     model, tokenizer = load_model_and_tokenizer(config.model_config)
     if torch.cuda.is_available():
         if config.model_config.use_accelerator:
@@ -76,14 +76,13 @@ def main(config: DefaultConfig):
 
 
     ######### DATASET #########
+    logger.info('Loading dataset...')
     dataset = load_dataset(config.dataset_config, supercloud=config.supercloud)
     logging.info(f'Original dataset size: {len(dataset)}')
-
 
     ######### DATASET PREPROCESSING #########
     processed_dataset = process_dataset(dataset, tokenizer, config.ctx_len, config.dataset_config.filter_and_chunk_config, return_text=True, offset=50)
     logging.info(f'Processed dataset size: {len(processed_dataset)}')
-
 
     ######### SETTING MODULE NAMES #########
     module_name_mapping, module_name_keys = create_module_names(config.model_config.module_name_mapping, config.cacheing_config.layer_idx_list, config.cacheing_config.module_inblock_keys, config.cacheing_config.module_outblock_keys)
@@ -91,8 +90,7 @@ def main(config: DefaultConfig):
     logging.info(f'module name keys: {module_name_keys}')
 
     ######### RUN EXPERIMENT #########
-
-    # Save_tensors with H5py 
+    logger.info('Starting experiment...')
     cache_manager = CacheManager(session_path, \
                                  save_cache_tensors=config.cacheing_config.save_cache_tensors, \
                                  save_mean_tensors=config.cacheing_config.save_mean_tensors, \
@@ -104,9 +102,6 @@ def main(config: DefaultConfig):
                                  num_cpus=config.multiprocessing_num_cpus, \
                                  verbose=config.verbose)
 
-    # TODO: feed in cache config into the manager, so that it can use the config to save the tensors or not
-
-    
     # Main function to run the experiment
     os.makedirs(session_path, exist_ok=True)
     save_config(config, session_path)

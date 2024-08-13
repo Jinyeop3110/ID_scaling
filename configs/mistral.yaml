@@ -1,0 +1,39 @@
+base_dir: null
+session_name: "test"
+session_path: "/Users/seungwookhan/Projects/ID_scaling/results/test"
+
+model_config:
+  model_name: "mistralai/Mistral-7B-Instruct-v0.1"
+  model_checkpoint: "main"
+  use_accelerator: false
+  module_name_mapping:
+    mlp: "model.layers.{layer}.mlp"
+    attn: "model.layers.{layer}.self_attn"
+    block: "model.layers.{layer}"
+    emb: "model.embed_tokens"
+    unemb: "model.norm"
+
+dataset_config:
+  dataset_name: "stas/openwebtext-10k"
+  dataset_subset: "train"
+  max_dataset_size: 100
+  filter_and_chunk_config:
+    min_chunks_from_a_document: 5
+    max_chunks_from_a_document: 5
+
+ctx_len: 1024
+batch_size: 2
+
+cacheing_config:
+  layer_idx_list: [0, 1, 10, 15, 31]
+  module_inblock_keys: ["mlp", "attn", "block"]
+  module_outblock_keys: ["unemb"]
+  save_fp: "torch.float16"
+  save_cache_tensors: true
+  save_mean_tensors: true
+  save_IDs: true
+  save_IDs_list: ["mle", "mind_ml", "twoNN_f10"]
+
+multiprocessing: true
+multiprocessing_num_cpus: 30
+verbose: true
