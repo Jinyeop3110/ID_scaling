@@ -1,9 +1,13 @@
 import gc
 import os
+from dataclasses import asdict
+
 import torch
-import json
-import os
 from bunch import Bunch
+import yaml
+
+from id_scaling.configs.default_config import DefaultConfig
+
 
 # Get the length of each input sequence
 def get_len_list(input_ids, pad_token_id, ctx_len):
@@ -72,8 +76,10 @@ def save_config(config, session_path):
         config_dict = recursive_unbunchify(config)
     elif isinstance(config, dict):
         config_dict = config
+    elif isinstance(config, DefaultConfig):
+        config_dict = asdict(config)
     else:
-        raise TypeError("Config must be either a dictionary or a Bunch object")
+        raise TypeError("Config must be either a dictionary or a Bunch object or DefaultConfig")
 
     # Debug: Print the config_dict to check its structure
     print("Config dictionary structure:")

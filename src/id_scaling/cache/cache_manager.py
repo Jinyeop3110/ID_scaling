@@ -169,7 +169,6 @@ class CacheManager:
             self.pool.join()
                 
 
-    @staticmethod
     def save_cache_tensors(self, cache):
         if not self.to_save_cache_tensors:
             logging.info('Skipping saving cache tensors')
@@ -196,7 +195,7 @@ class CacheManager:
         end = time.time()
         logging.info('Cache tensors saved in {:.2f}s'.format(end - start))
 
-    @staticmethod
+
     def save_mean_tensors(self, cache):
         if self.to_save_mean_tensors:
             logging.info('Skipping saving mean tensors')
@@ -224,7 +223,6 @@ class CacheManager:
         logging.info('Mean tensors saved in {:.2f}s'.format(end - start))
 
 
-    @staticmethod
     def save_IDs(self, cache, IDs_methods_list):
         if not self.to_save_ids:
             logging.info('Skipping saving IDs')
