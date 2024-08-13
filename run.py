@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO, handlers=[RichHandler()])
 
 
 # Function to process each batch, run the model, and calculate entropy
+@torch.inference_mode()
 def run_batch_with_cache(model, batch, config):
     input_token_ids = torch.tensor(batch['tokens'])
 
@@ -36,24 +37,19 @@ def run_batch_with_cache(model, batch, config):
     if torch.cuda.is_available():
         input_token_ids = input_token_ids.cuda()
 
-    with torch.no_grad():
-        outputs = model(input_token_ids, use_cache=False)
-        logits = outputs.logits
-        del outputs
+    outputs = model(input_token_ids)
+    logits = outputs.logits
 
-        shift_logits = logits[:, :-1, :].contiguous()
-        shift_labels = input_token_ids[:, 1:].contiguous()
+    shift_logits = logits[:, :-1, :].contiguous()
+    shift_labels = input_token_ids[:, 1:].contiguous()
 
-        loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
-        loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        loss = loss.view(shift_logits.size(0), shift_logits.size(1))
+    loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
+    loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+    loss = loss.view(shift_logits.size(0), shift_logits.size(1))
 
-        # Calculate entropy from logits
-        probs = torch.softmax(shift_logits, dim=-1)
-        entropy = -torch.sum(probs * torch.log(probs+1e-9), dim=-1)
-        # entropy = -torch.sum(probs * torch.log(probs + 1e-9), dim=-1)
-        del probs
-        torch.cuda.empty_cache()
+    # Calculate entropy from logits
+    probs = torch.softmax(shift_logits, dim=-1)
+    entropy = -torch.sum(probs * torch.log(probs+1e-9), dim=-1)
 
     return df_metadata, loss.detach(), entropy.detach()
 
@@ -145,6 +141,7 @@ def main(config: DefaultConfig):
     
     # Remove hooks after processing
     remove_hooks(hooks)
+
 
 if __name__ == "__main__":
 
