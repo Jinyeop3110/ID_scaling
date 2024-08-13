@@ -5,6 +5,13 @@ import json
 import os
 from bunch import Bunch
 
+# Get the length of each input sequence
+def get_len_list(input_ids, pad_token_id, ctx_len):
+    len_list = (input_ids == pad_token_id).int().argmax(dim=1)
+    len_list[len_list == 0] = ctx_len
+    return len_list.numpy()
+
+
 def clear_gpu_memory(*args):
     """
     Clears specified PyTorch tensors or models from GPU memory, then clears the GPU memory cache.

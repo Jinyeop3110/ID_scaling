@@ -17,6 +17,7 @@ from id_scaling.utils import *
 from id_scaling.cache import *
 from id_scaling.configs.default_config import DefaultConfig
 from id_scaling.utils.config_utils import update_config_from_yaml
+from id_scaling.utils.model_utils import create_module_names
 
 
 ######### LOGGING #########
@@ -24,8 +25,45 @@ logger = logging.getLogger("rich")
 logging.basicConfig(level=logging.INFO, handlers=[RichHandler()])
 
 
+    
+
+
+# Function to process each batch, run the model, and calculate entropy
+def run_batch_with_cache(model, batch, config):
+    input_token_ids = torch.tensor(batch['tokens'])
+
+    len_list = get_len_list(input_token_ids, -1, config.ctx_len)
+    df_metadata = pd.DataFrame({key: value for key, value in batch.items() if key != 'text'})
+    df_metadata['len'] = len_list
+    
+    if torch.cuda.is_available():
+        input_token_ids = input_token_ids.cuda()
+
+    with torch.no_grad():
+        outputs = model(input_token_ids, use_cache=False)
+        logits = outputs.logits
+        del outputs
+
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = input_token_ids[:, 1:].contiguous()
+
+        loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
+        loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        loss = loss.view(shift_logits.size(0), shift_logits.size(1))
+
+        # Calculate entropy from logits
+        probs = torch.softmax(shift_logits, dim=-1)
+        entropy = -torch.sum(probs * torch.log(probs+1e-9), dim=-1)
+        # entropy = -torch.sum(probs * torch.log(probs + 1e-9), dim=-1)
+        del probs
+        torch.cuda.empty_cache()
+
+    return df_metadata, loss.detach(), entropy.detach()
+
 def main(config: DefaultConfig):
+    ######### VARIABLES #########
     session_path = config.session_path  # Update this to your desired path
+    batch_size = config.batch_size
     
     ######### MODEL #########
     logger.info('')
@@ -51,115 +89,14 @@ def main(config: DefaultConfig):
 
 
     ######### SETTING MODULE NAMES #########
-    batch_size = config.batch_size
-
-    def create_module_names(module_name_mapping, layer_idx_list, module_inblock_keys, module_outblock_keys):
-
-        module_name_mapping=dict(module_name_mapping)
-
-        module_inblock_mapping = {
-            f"{module_key}-l{layer}" : module_name_mapping[module_key].format(layer=layer) if module_key else ""
-            for layer in layer_idx_list for module_key in module_inblock_keys
-        }
-        module_outblock_mapping = {
-            f"{module_key}" : module_name_mapping[module_key] if module_key else ""
-            for module_key in module_outblock_keys
-        }   
-        module_name_mapping = {**module_inblock_mapping, **module_outblock_mapping}
-        module_name_keys = list(module_name_mapping.keys())
-        return module_name_mapping, module_name_keys
-    
     module_name_mapping, module_name_keys = create_module_names(config.model_config.module_name_mapping, config.cacheing_config.layer_idx_list, config.cacheing_config.module_inblock_keys, config.cacheing_config.module_outblock_keys)
-
     print(module_name_mapping)
-
     print(module_name_keys)
 
-
-
-    ##############################################################################################################################################################################################
-    ################################################################################## Hyperparam ################################################################################################
-    ##############################################################################################################################################################################################
-    # config define
-    '''
-    config = {
-        "session_name": session_name,
-        "session_path": session_path,
-        "model_name": model_name,
-        "model_checkpoint": model_checkpoint,
-        "use_accelerator" : use_accelerator,
-        "dataset_name": dataset_name,
-        "dataset_subset": dataset_subset,
-        "d_model": model.config.hidden_size,
-        "ctx_len": ctx_len,
-        "tokens_min_length": tokens_min_length,
-        "batch_size": batch_size,
-        "pos_list": None,  # Convert numpy array to list for better readability in logs
-        "cache": cache,
-        "module_name_list": module_name_list,
-        "layer_idx_list": layer_idx_list.tolist(),  # Convert numpy array to list
-        "module_inblock_list": module_inblock_list,
-        "module_outblock_list": module_outblock_list,
-        "module_list": module_list
-    }'''
-
-
-    ##############################################################################################################################################################################################
-    ################################################################################## Running experiment ################################################################################################
-    ##############################################################################################################################################################################################
-
-    # Create the directory if it doesn't exist
-
-
-
-    # Get the length of each input sequence
-    def get_len_list(input_ids, pad_token_id):
-        len_list = (input_ids == pad_token_id).int().argmax(dim=1)
-        len_list[len_list == 0] = config.ctx_len
-        return len_list.numpy()
+    ######### RUN EXPERIMENT #########
 
     # Save_tensors with H5py 
-
     cache_manager = CacheManager(session_path, num_samples=len(processed_dataset), ctx_len=config.ctx_len, embedding_dims=model.config.hidden_size, multiprocessing=config.multiprocessing, num_cpus=config.multiprocessing_num_cpus, verbose=config.verbose)
-
-    # Function to process each batch, run the model, and calculate entropy
-    def run_batch_with_cache(batch):
-        input_token_ids = torch.tensor(batch['tokens'])
-
-        len_list = get_len_list(input_token_ids, -1)
-        df_metadata = pd.DataFrame({key: value for key, value in batch.items() if key != 'text'})
-        df_metadata['len'] = len_list
-        
-        if torch.cuda.is_available():
-            input_token_ids = input_token_ids.cuda()
-
-        with torch.no_grad():
-            outputs = model(input_token_ids, use_cache=False)
-            logits = outputs.logits
-            del outputs
-
-            shift_logits = logits[:, :-1, :].contiguous()
-            shift_labels = input_token_ids[:, 1:].contiguous()
-
-            loss_fn = torch.nn.CrossEntropyLoss(reduction='none')
-            loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            loss = loss.view(shift_logits.size(0), shift_logits.size(1))
-
-            # Calculate entropy from logits
-            probs = torch.softmax(shift_logits, dim=-1)
-            entropy = -torch.sum(probs * torch.log(probs+1e-9), dim=-1)
-            # entropy = -torch.sum(probs * torch.log(probs + 1e-9), dim=-1)
-            del probs
-            torch.cuda.empty_cache()
-
-        return df_metadata, loss.detach(), entropy.detach()
-
-
-
-    ##############################################################################################################################################################################################
-    ################################################################################## Running experiment ################################################################################################
-    ##############################################################################################################################################################################################
-
 
     # Main function to run the experiment
     os.makedirs(session_path, exist_ok=True)
@@ -174,7 +111,7 @@ def main(config: DefaultConfig):
         start_time = time.time()
 
         batch = processed_dataset[i:i + batch_size]
-        df_metadata, loss, entropy = run_batch_with_cache(batch)
+        df_metadata, loss, entropy = run_batch_with_cache(model, batch, config)
 
         forward_pass_time = time.time()
         print(f"Forward pass time consumed: {forward_pass_time - start_time:.4f} seconds")
@@ -210,8 +147,7 @@ def main(config: DefaultConfig):
         cache_manager.check_and_increment_index(increment=len(df_metadata))
         clear_gpu_memory(cache)
         print(f"{i} to {i+batch_size-1} done / vectors, loss and entropy are calculated and saved.")
-        
-
+    
     # Remove hooks after processing
     remove_hooks(hooks)
 
