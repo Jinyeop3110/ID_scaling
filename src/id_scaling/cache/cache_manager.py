@@ -12,32 +12,8 @@ from id_scaling.utils import *
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 mp.set_start_method('spawn', force=True)
 
-# Global variable to store module names
+# Global variable to store module names # TODO: what's the purpose of this?
 MODULE_NAME_KEYS = {}
-
-# Global cache to store outputs
-cache = {}
-
-def hook_fn_all(module, input, output):
-    # Retrieve the full name from the global MODULE_NAME_KEYS
-    with torch.no_grad():
-        full_name = MODULE_NAME_KEYS.get(module, "Unknown")
-        if isinstance(output, tuple):
-            output = output[0]
-        cache[full_name] = output.detach().cpu().numpy().astype(np.float16)
-
-def register_hooks(model, module_name_mapping):
-    hooks = []
-    global MODULE_NAME_KEYS
-    MODULE_NAME_KEYS.clear()  # Clear previous entries
-    reverse_mapping = {v: k for k, v in module_name_mapping.items()}
-    
-    for name, module in model.named_modules():
-        if name in reverse_mapping:
-            hooks.append(module.register_forward_hook(hook_fn_all))
-            MODULE_NAME_KEYS[module] = reverse_mapping[name]
-    
-    return hooks
 
 # Save metadata to files
 

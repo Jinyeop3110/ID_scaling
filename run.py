@@ -25,9 +25,6 @@ logger = logging.getLogger("rich")
 logging.basicConfig(level=logging.INFO, handlers=[RichHandler()])
 
 
-    
-
-
 # Function to process each batch, run the model, and calculate entropy
 def run_batch_with_cache(model, batch, config):
     input_token_ids = torch.tensor(batch['tokens'])
@@ -60,6 +57,7 @@ def run_batch_with_cache(model, batch, config):
 
     return df_metadata, loss.detach(), entropy.detach()
 
+
 def main(config: DefaultConfig):
     ######### VARIABLES #########
     session_path = config.session_path  # Update this to your desired path
@@ -80,18 +78,18 @@ def main(config: DefaultConfig):
 
     ######### DATASET #########
     dataset = load_dataset(config.dataset_config, supercloud=config.supercloud)
-    print(f"Original dataset size: {len(dataset)}")
+    logging.info(f'Original dataset size: {len(dataset)}')
 
 
     ######### DATASET PREPROCESSING #########
     processed_dataset = process_dataset(dataset, tokenizer, config.ctx_len, config.dataset_config.filter_and_chunk_config, return_text=True, offset=50)
-    print(f"Processed dataset size: {len(processed_dataset)}")
+    logging.info(f'Processed dataset size: {len(processed_dataset)}')
 
 
     ######### SETTING MODULE NAMES #########
     module_name_mapping, module_name_keys = create_module_names(config.model_config.module_name_mapping, config.cacheing_config.layer_idx_list, config.cacheing_config.module_inblock_keys, config.cacheing_config.module_outblock_keys)
-    print(module_name_mapping)
-    print(module_name_keys)
+    logging.info(f'module name mapping: {module_name_mapping}')
+    logging.info(f'module name keys: {module_name_keys}')
 
     ######### RUN EXPERIMENT #########
 
