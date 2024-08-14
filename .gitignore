@@ -10,7 +10,6 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-Data/
 !Data/.gitkeep
 Figure/
 !Figure/.gitkeep
